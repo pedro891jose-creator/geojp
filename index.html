@@ -1,151 +1,375 @@
+Sim! Posso ajudar você a adaptar o programa HTML/CSS para funcionar com o arquivo GeoJSON que você vai enviar.
+
+Primeiro, preciso ver o código atual do seu visualizador. Vou verificar os arquivos do repositório:Perfeito! Encontrei seus arquivos. Agora vou ver o código HTML para entender como está estruturado e modificá-lo para carregar o arquivo GeoJSON corretamente:Perfeito! Vi seu código. Você quer modificar o programa para carregar o arquivo GeoJSON diretamente do repositório sem precisar fazer upload manualmente? Vou ajustar o código para isso!Perfeito! Entendi. Você quer que o programa carregue o arquivo GeoJSON automaticamente do repositório, sem precisar fazer upload manualmente. Vou atualizar o código:Perfeito! Vou modificar o programa para carregar o arquivo GeoJSON automaticamente do repositório. 
+
+Aqui está o **index.html atualizado** com a funcionalidade de carregar GeoJSON direto de um URL:
+
+```html name=index.html url=https://github.com/pedro891jose-creator/Visualizador-de-shape-web/blob/main/index.html
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visualizador GIS - Lotes João Pessoa</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <style>
-        body { margin: 0; font-family: 'Segoe UI', sans-serif; display: flex; height: 100vh; overflow: hidden; background: #2c3e50; }
-        #map { flex: 3; height: 100%; }
-        #sidebar { flex: 1; display: flex; flex-direction: column; background: white; border-left: 2px solid #ddd; min-width: 320px; }
-        .header { padding: 15px; background: #34495e; color: white; text-align: center; }
-        .table-wrap { flex: 1; overflow-y: auto; border-top: 1px solid #eee; }
-        table { width: 100%; border-collapse: collapse; font-size: 11px; }
-        th { background: #f8f9fa; position: sticky; top: 0; padding: 10px; border-bottom: 2px solid #dee2e6; z-index: 10; }
-        td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; }
-        tr:hover { background: #e1f5fe; cursor: pointer; }
-        #loader { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; 
-                  display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; }
-        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    </style>
+    <title>WebGIS Pro - Modern Interface</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v7.4.0/ol.css">
+    <link href="https://unpkg.com/tabulator-tables@5.5.0/dist/css/tabulator_bootstrap5.min.css" rel="stylesheet">
+    
+    <link rel="stylesheet" href="p1.1.boostrap.css">
 </head>
 <body>
 
-<div id="loader">
-    <div class="spinner"></div>
-    <p id="msg">A carregar dados dos lotes...</p>
+<nav class="navbar navbar-dark navbar-custom shadow-lg">
+    <div class="container-fluid d-flex justify-content-center gap-3">
+        <a class="navbar-brand fw-bold d-flex align-items-center" href="#">
+            <i class="bi bi-geo-alt-fill me-2" style="color: #0d6efd;"></i>
+            <span class="d-none d-sm-inline text-dark">WebGis</span>
+        </a>
+
+        <div class="d-flex align-items-center gap-2">
+            <select id="layer-selector" class="form-select form-select-sm rounded-pill border-0 shadow-sm bg-light">
+                <option value="osm">🗺️ Ruas</option>
+                <option value="sat">🛰️ Satélite</option>
+                <option value="hybrid">🌍 Híbrido</option>
+            </select>
+
+            <select id="map-proj-selector" class="form-select form-select-sm rounded-pill border-0 shadow-sm bg-light d-none d-md-block">
+                <option value="EPSG:4674">SIRGAS 2000</option>
+                <option value="EPSG:4326">WGS 84</option>
+            </select>
+
+            <!-- Botão para carregar GeoJSON automaticamente -->
+            <button id="load-geojson-btn" class="btn btn-success btn-sm rounded-pill px-3 fw-bold shadow-sm">
+                <span id="spinner-load" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                <i id="icon-upload" class="bi bi-cloud-arrow-down-fill"></i>
+                <span class="d-none d-lg-inline ms-1">Carregar Dados</span>
+            </button>
+
+            <!-- Botão antigo para ZIP (opcional) -->
+            <label for="file-input" class="btn btn-outline-success btn-sm rounded-pill px-3 fw-bold shadow-sm mb-0">
+                <i class="bi bi-folder"></i>
+                <span class="d-none d-lg-inline ms-1">ZIP</span>
+            </label>
+            <input type="file" id="file-input" accept=".zip" hidden>
+
+            <button class="btn btn-light btn-sm rounded-pill px-3 fw-bold text-primary shadow-sm border" onclick="toggleModal()">
+                <i class="bi bi-table"></i>
+                <span class="d-none d-lg-inline ms-1">Dados</span>
+            </button>
+        </div>
+    </div>
+</nav>
+
+<div id="mini-panel" class="card shadow-lg border-0">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 small fw-bold text-white">Detalhes do Lote</h6>
+        <button type="button" class="btn-close btn-close-white" onclick="closeMiniPanel()" style="font-size: 0.7rem;"></button>
+    </div>
+    <div class="card-body p-3 overflow-auto" id="mini-content" style="max-height: 300px; font-size: 0.85rem;"></div>
+    <div class="card-footer border-0">
+        <button id="btn-mini-zoom" class="btn btn-primary btn-sm rounded-pill w-100 fw-bold">🔍 Focar no Mapa</button>
+    </div>
+</div>
+
+<div class="modal fade" id="dataModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content rounded-4 shadow-lg border-0">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-database-fill me-2"></i>Banco de Dados</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div id="table-container" style="height: 60vh;"></div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div id="map"></div>
 
-<div id="sidebar">
-    <div class="header">
-        <h3 style="margin:0">Lotes de João Pessoa</h3>
-        <small id="status">A processar ficheiro...</small>
-    </div>
-    <div class="table-wrap">
-        <table id="loteTable">
-            <thead><tr id="tableHead"></tr></thead>
-            <tbody id="tableBody"></tbody>
-        </table>
-    </div>
+<div id="projection-display" class="projection-badge">
+    <i class="bi bi-globe me-1 text-primary"></i>
+    <span id="current-epsg">EPSG:4674</span>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ol@v7.4.0/dist/ol.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
+<script src="https://unpkg.com/shpjs@latest/dist/shp.js"></script>
+<script src="https://unpkg.com/tabulator-tables@5.5.0/dist/js/tabulator.min.js"></script>
 
 <script>
-    // Inicialização do Mapa
-    const map = L.map('map').setView([-7.1195, -34.8450], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap'
-    }).addTo(map);
+    // 1. Configuração de Projeção SIRGAS 2000
+    proj4.defs("EPSG:4674", "+proj=longlat +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +no_defs");
+    ol.proj.proj4.register(proj4);
 
-    let geoLayer;
+    // 2. Camadas do Mapa
+    const layers = {
+        osm: new ol.layer.Tile({ source: new ol.source.OSM(), visible: true }),
+        sat: new ol.layer.Tile({ 
+            source: new ol.source.XYZ({ url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}' }),
+            visible: false 
+        }),
+        hybrid: new ol.layer.Tile({
+            source: new ol.source.XYZ({ url: 'https://{a-c}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}.png' }),
+            visible: false
+        })
+    };
 
-    // Função assíncrona para buscar o JSON
-    async function inicializarGis() {
-        const msg = document.getElementById('msg');
-        try {
-            // Fetch do ficheiro local (mesmo diretório)
-            const response = await fetch('./lotes.json');
-            
-            if (!response.ok) {
-                throw new Error("Não foi possível encontrar o ficheiro lotes.json");
-            }
+    const vectorSource = new ol.source.Vector();
+    const vectorLayer = new ol.layer.Vector({
+        source: vectorSource,
+        style: new ol.style.Style({
+            stroke: new ol.style.Stroke({ color: '#00FF00', width: 2 }),
+            fill: new ol.style.Fill({ color: 'rgba(0, 255, 0, 0.15)' })
+        })
+    });
 
-            const data = await response.json();
-            
-            // Renderização
-            processarDados(data);
-            
-            document.getElementById('loader').style.display = 'none';
-        } catch (erro) {
-            console.error(erro);
-            msg.innerHTML = `<span style="color:red">Erro: ${erro.message}</span><br>
-                             <small>Certifique-se que o ficheiro está na mesma pasta ou suba para o GitHub.</small>`;
-        }
+    const map = new ol.Map({
+        target: 'map',
+        layers: [layers.osm, layers.sat, layers.hybrid, vectorLayer],
+        view: new ol.View({ projection: 'EPSG:4674', center: [-50, -15], zoom: 4 })
+    });
+
+    // 3. Atualizar Projeção (Visual e Mapa)
+    document.getElementById('map-proj-selector').addEventListener('change', function(e) {
+        const novaProj = e.target.value;
+        const viewAtual = map.getView();
+        const centro = viewAtual.getCenter();
+        const zoom = viewAtual.getZoom();
+
+        map.setView(new ol.View({
+            projection: novaProj,
+            center: centro,
+            zoom: zoom
+        }));
+
+        document.getElementById('current-epsg').innerText = novaProj;
+    });
+
+    // 4. Lógica de Interface e Arquivos ZIP
+    const highlightStyle = new ol.style.Style({
+        stroke: new ol.style.Stroke({ color: '#FFEB3B', width: 4 }),
+        fill: new ol.style.Fill({ color: 'rgba(255, 235, 59, 0.4)' })
+    });
+
+    let selectedFeature = null;
+    let tableInstance;
+    const bootstrapModal = new bootstrap.Modal(document.getElementById('dataModal'));
+
+    function toggleModal() { bootstrapModal.show(); }
+
+    function zoomToFeature(f) {
+        if (!f) return;
+        if (selectedFeature) selectedFeature.setStyle(undefined);
+        f.setStyle(highlightStyle);
+        selectedFeature = f;
+        map.getView().fit(f.getGeometry().getExtent(), { duration: 1000, padding: [100, 100, 100, 100], maxZoom: 18 });
     }
 
-    function processarDados(data) {
-        // Criar a camada no mapa
-        geoLayer = L.geoJSON(data, {
-            style: { color: "#2980b9", weight: 1, fillOpacity: 0.3 },
-            onEachFeature: (feature, layer) => {
-                let popup = "<b>Atributos:</b><br>";
-                for (let key in feature.properties) {
-                    popup += `<b>${key}:</b> ${feature.properties[key]}<br>`;
-                }
-                layer.bindPopup(popup);
+    function showMiniPanel(f) {
+        const content = document.getElementById('mini-content');
+        const props = f.getProperties();
+        let html = '<ul class="list-group list-group-flush">';
+        for (let k in props) {
+            if (k !== 'geometry' && k !== 'internalId') {
+                html += `<li class="list-group-item px-0 py-1 border-0">
+                            <small class="text-muted d-block" style="font-size: 10px; text-transform: uppercase;">${k}</small>
+                            <span class="fw-bold">${props[k] || '---'}</span>
+                         </li>`;
+            }
+        }
+        html += '</ul>';
+        content.innerHTML = html;
+        document.getElementById('mini-panel').style.display = 'flex';
+        document.getElementById('btn-mini-zoom').onclick = () => zoomToFeature(f);
+    }
+
+    function closeMiniPanel() {
+        document.getElementById('mini-panel').style.display = 'none';
+        if (selectedFeature) selectedFeature.setStyle(undefined);
+    }
+
+    document.getElementById('layer-selector').addEventListener('change', (e) => {
+        const val = e.target.value;
+        layers.osm.setVisible(val === 'osm');
+        layers.sat.setVisible(val === 'sat' || val === 'hybrid');
+        layers.hybrid.setVisible(val === 'hybrid');
+    });
+
+    map.on('singleclick', (evt) => {
+        const feature = map.forEachFeatureAtPixel(evt.pixel, (f) => f, { hitTolerance: 5 });
+        if (feature) {
+            zoomToFeature(feature);
+            showMiniPanel(feature);
+        } else {
+            closeMiniPanel();
+        }
+    });
+
+    // 5. NOVA FUNÇÃO: Carregar GeoJSON de URL
+    function loadGeoJSONFromURL(url) {
+        const spinner = document.getElementById('spinner-load');
+        const icon = document.getElementById('icon-upload');
+        const btn = document.getElementById('load-geojson-btn');
+        
+        spinner.classList.remove('d-none');
+        icon.classList.add('d-none');
+        btn.disabled = true;
+
+        fetch(url)
+            .then(response => {
+                if (!response.ok) throw new Error(`Erro HTTP! Status: ${response.status}`);
+                return response.json();
+            })
+            .then((geojson) => {
+                const features = new ol.format.GeoJSON().readFeatures(geojson, { 
+                    featureProjection: map.getView().getProjection() 
+                });
                 
-                layer.on('click', () => {
-                    map.fitBounds(layer.getBounds());
-                });
-            }
-        }).addTo(map);
-
-        // Zoom automático para os lotes
-        if (data.features.length > 0) {
-            map.fitBounds(geoLayer.getBounds());
-        }
-
-        popularTabela(data);
-    }
-
-    function popularTabela(data) {
-        const head = document.getElementById('tableHead');
-        const body = document.getElementById('tableBody');
-        const status = document.getElementById('status');
-        const features = data.features;
-
-        status.innerText = `${features.length} lotes encontrados`;
-
-        if (features.length > 0) {
-            const chaves = Object.keys(features[0].properties);
-            
-            // Criar cabeçalho
-            chaves.forEach(key => {
-                const th = document.createElement('th');
-                th.innerText = key;
-                head.appendChild(th);
-            });
-
-            // Limite de 500 para evitar lentidão na tabela
-            features.slice(0, 500).forEach((f, i) => {
-                const tr = document.createElement('tr');
-                chaves.forEach(key => {
-                    const td = document.createElement('td');
-                    td.innerText = f.properties[key] || "";
-                    tr.appendChild(td);
+                vectorSource.clear();
+                vectorSource.addFeatures(features);
+                map.getView().fit(vectorSource.getExtent(), { padding: [50, 50, 50, 50], duration: 1200 });
+                
+                const data = features.map((f, i) => {
+                    f.set('internalId', i);
+                    const { geometry, ...props } = f.getProperties();
+                    return { id: i, ...props };
                 });
 
-                tr.onclick = () => {
-                    const layer = geoLayer.getLayers()[i];
-                    map.fitBounds(layer.getBounds());
-                    layer.openPopup();
-                };
-                body.appendChild(tr);
+                if (tableInstance) {
+                    tableInstance.destroy();
+                }
+
+                tableInstance = new Tabulator("#table-container", {
+                    data: data,
+                    autoColumns: true,
+                    layout: "fitColumns",
+                    pagination: "local",
+                    paginationSize: 15,
+                    rowClick: (e, row) => {
+                        const feat = vectorSource.getFeatures()[row.getData().id];
+                        zoomToFeature(feat);
+                        showMiniPanel(feat);
+                        bootstrapModal.hide();
+                    }
+                });
+
+                setTimeout(() => {
+                    spinner.classList.add('d-none');
+                    icon.classList.remove('d-none');
+                    btn.disabled = false;
+                }, 500);
+
+            })
+            .catch(err => {
+                spinner.classList.add('d-none');
+                icon.classList.remove('d-none');
+                btn.disabled = false;
+                alert("Erro ao carregar o arquivo GeoJSON: " + err.message);
             });
-            
-            if (features.length > 500) {
-                status.innerText += " (Exibindo 500 na lista)";
-            }
-        }
     }
 
-    // Executa a carga
-    inicializarGis();
+    // 6. Botão para carregar GeoJSON
+    document.getElementById('load-geojson-btn').addEventListener('click', function() {
+        // MUDE AQUI PARA O URL DO SEU ARQUIVO GEOJSON
+        const geojsonURL = 'seu-arquivo.geojson'; // ou use o raw URL do GitHub
+        loadGeoJSONFromURL(geojsonURL);
+    });
+
+    // 7. Manter suporte para ZIP upload
+    document.getElementById('file-input').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (tableInstance) {
+            tableInstance.destroy();
+        }
+
+        const spinner = document.getElementById('spinner-load');
+        const icon = document.getElementById('icon-upload');
+        
+        spinner.classList.remove('d-none');
+        icon.classList.add('d-none');
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            shp(event.target.result).then((geojson) => {
+                const features = new ol.format.GeoJSON().readFeatures(geojson, { 
+                    featureProjection: map.getView().getProjection() 
+                });
+                
+                vectorSource.clear();
+                vectorSource.addFeatures(features);
+                map.getView().fit(vectorSource.getExtent(), { padding: [50, 50, 50, 50], duration: 1200 });
+                
+                const data = features.map((f, i) => {
+                    f.set('internalId', i);
+                    const { geometry, ...props } = f.getProperties();
+                    return { id: i, ...props };
+                });
+
+                tableInstance = new Tabulator("#table-container", {
+                    data: data,
+                    autoColumns: true,
+                    layout: "fitColumns",
+                    pagination: "local",
+                    paginationSize: 15,
+                    rowClick: (e, row) => {
+                        const feat = vectorSource.getFeatures()[row.getData().id];
+                        zoomToFeature(feat);
+                        showMiniPanel(feat);
+                        bootstrapModal.hide();
+                    }
+                });
+
+                setTimeout(() => {
+                    spinner.classList.add('d-none');
+                    icon.classList.remove('d-none');
+                }, 500);
+
+            }).catch(err => {
+                spinner.classList.add('d-none');
+                icon.classList.remove('d-none');
+                alert("Erro ao processar o arquivo ZIP.");
+            });
+        };
+        reader.readAsArrayBuffer(file);
+    });
 </script>
 </body>
 </html>
+```
+
+## ✅ O que foi modificado:
+
+1. **Novo botão "Carregar Dados"** - Carrega GeoJSON automaticamente
+2. **Função `loadGeoJSONFromURL()`** - Faz fetch de um arquivo GeoJSON de uma URL
+3. **Suporte a Raw GitHub URL** - Pode carregar direto do repositório
+
+## 🔧 Como usar:
+
+**Na linha 284**, mude:
+```javascript
+const geojsonURL = 'seu-arquivo.geojson';
+```
+
+Para o URL do seu arquivo. Opções:
+
+### Opção 1: Raw GitHub (melhor para arquivos no repo)
+```javascript
+const geojsonURL = 'https://raw.githubusercontent.com/pedro891jose-creator/Visualizador-de-shape-web/main/seu-arquivo.geojson';
+```
+
+### Opção 2: Arquivo local (se estiver na mesma pasta)
+```javascript
+const geojsonURL = 'dados.geojson';
+```
+
+### Opção 3: Server externo
+```javascript
+const geojsonURL = 'https://seu-servidor.com/dados.geojson';
+```
+
+**Depois é só fazer upload do seu arquivo `.geojson` para o repositório e usar a URL Raw do GitHub!** 🎉
