@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizador GIS - Lotes João Pessoa</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; display: flex; height: 100vh; overflow: hidden; background: #2c3e50; }
+        #map { flex: 3; height: 100%; }
+        #sidebar { flex: 1; display: flex; flex-direction: column; background: white; border-left: 2px solid #ddd; min-width: 320px; }
+        .header { padding: 15px; background: #34495e; color: white; text-align: center; }
+        .table-wrap { flex: 1; overflow-y: auto; border-top: 1px solid #eee; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        th { background: #f8f9fa; position: sticky; top: 0; padding: 10px; border-bottom: 2px solid #dee2e6; z-index: 10; }
+        td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; }
+        tr:hover { background: #e1f5fe; cursor: pointer; }
+        #loader { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; 
+                  display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div id="loader">
+    <div class="spinner"></div>
+    <p id="msg">A carregar dados dos lotes...</p>
+</div>
+
+<div id="map"></div>
+
+<div id="sidebar">
+    <div class="header">
+        <h3 style="margin:0">Lotes de João Pessoa</h3>
+        <small id="status">A processar ficheiro...</small>
+    </div>
+    <div class="table-wrap">
+        <table id="loteTable">
+            <thead><tr id="tableHead"></tr></thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    // Inicialização do Mapa
+    const map = L.map('map').setView([-7.1195, -34.8450], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    let geoLayer;
+
+    // Função assíncrona para buscar o JSON
+    async function inicializarGis() {
+        const msg = document.getElementById('msg');
+        try {
+            // Fetch do ficheiro local (mesmo diretório)
+            const response = await fetch('./lotes.json');
+            
+            if (!response.ok) {
+                throw new Error("Não foi possível encontrar o ficheiro lotes.json");
+            }
+
+            const data = await response.json();
+            
+            // Renderização
+            processarDados(data);
+            
+            document.getElementById('loader').style.display = 'none';
+        } catch (erro) {
+            console.error(erro);
+            msg.innerHTML = `<span style="color:red">Erro: ${erro.message}</span><br>
+                             <small>Certifique-se que o ficheiro está na mesma pasta ou suba para o GitHub.</small>`;
+        }
+    }
+
+    function processarDados(data) {
+        // Criar a camada no mapa
+        geoLayer = L.geoJSON(data, {
+            style: { color: "#2980b9", weight: 1, fillOpacity: 0.3 },
+            onEachFeature: (feature, layer) => {
+                let popup = "<b>Atributos:</b><br>";
+                for (let key in feature.properties) {
+                    popup += `<b>${key}:</b> ${feature.properties[key]}<br>`;
+                }
+                layer.bindPopup(popup);
+                
+                layer.on('click', () => {
+                    map.fitBounds(layer.getBounds());
+                });
+            }
+        }).addTo(map);
+
+        // Zoom automático para os lotes
+        if (data.features.length > 0) {
+            map.fitBounds(geoLayer.getBounds());
+        }
+
+        popularTabela(data);
+    }
+
+    function popularTabela(data) {
+        const head = document.getElementById('tableHead');
+        const body = document.getElementById('tableBody');
+        const status = document.getElementById('status');
+        const features = data.features;
+
+        status.innerText = `${features.length} lotes encontrados`;
+
+        if (features.length > 0) {
+            const chaves = Object.keys(features[0].properties);
+            
+            // Criar cabeçalho
+            chaves.forEach(key => {
+                const th = document.createElement('th');
+                th.innerText = key;
+                head.appendChild(th);
+            });
+
+            // Limite de 500 para evitar lentidão na tabela
+            features.slice(0, 500).forEach((f, i) => {
+                const tr = document.createElement('tr');
+                chaves.forEach(key => {
+                    const td = document.createElement('td');
+                    td.innerText = f.properties[key] || "";
+                    tr.appendChild(td);
+                });
+
+                tr.onclick = () => {
+                    const layer = geoLayer.getLayers()[i];
+                    map.fitBounds(layer.getBounds());
+                    layer.openPopup();
+                };
+                body.appendChild(tr);
+            });
+            
+            if (features.length > 500) {
+                status.innerText += " (Exibindo 500 na lista)";
+            }
+        }
+    }
+
+    // Executa a carga
+    inicializarGis();
+</script>
+</body>
+</html>
